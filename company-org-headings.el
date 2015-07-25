@@ -28,15 +28,16 @@
 
 ;;; Commentary:
 
-;; This backend for `company' provides completion for headings in
-;; Org-mode files in a specified directory. This package is directed
-;; towards Org-mode users that keep their notes in multiple files and
-;; try to interconnect them with extensive linking. The idea behind
-;; this is making it as easy as possible to link notes to each other
-;; while taking new notes. This may be of great use when trying to
-;; create a knowledge base system similar to Niklas Luhmann's
-;; Zettelkasten. Certainly there are may other ways to use this
-;; library.
+;; This backend for `company' provides completion for Org-mode
+;; headings of org files in a specified directory. This package is
+;; directed towards Org-mode users that keep their notes in multiple
+;; files and try to interconnect them with extensive linking. The idea
+;; behind this is making it as easy as possible to link new notes to
+;; the concurrent knowledge base in the process of writing them. This
+;; may be of great use when trying to create a knowledge base system
+;; similar to Niklas Luhmann's Zettelkasten that evolves to something
+;; like a "second brain" only by linking the bits of information
+;; together. Certainly there may be other ways to use this library.
 
 ;;; Code:
 
@@ -113,20 +114,20 @@
   :group 'completion
   :prefix "company-org-headings/")
 
-(defcustom company-org-headings/search-directory "~/notes"
-  "Directory where the files reside, from which the headings are being extracted."
+(defcustom company-org-headings/search-directory nil
+  "Search for Org-mode headings in this directory."
   :type 'string
   :group 'company-org-headings)
 
 (defcustom company-org-headings/restricted-to-directory t
-  "Non-nil for completion in the `company-org-headings/search-directory' only."
+  "Complete in `company-org-headings/search-directory' only."
   :type 'boolean
   :group 'company-org-headings)
 
 (defcustom company-org-headings/stopwords
   (append company-org-headings/stopwords-english
 	  company-org-headings/stopwords-german)
-  "Collection of stopwords to be removed from `company-org-headings/candidates'."
+  "Collection of stopwords to be removed from the candidates."
   :type 'list
   :group 'company-org-headings)
 
@@ -137,25 +138,27 @@
 
 (defcustom company-org-headings/no-cache '(equal arg "")
   "Avoid caching to match the prefix with every word of a candidate.
-    Slows down candidates retrieval significantly."
+Slows down candidates retrieval significantly."
   :type 'boolean
   :group 'company-org-headings)
 
 (defcustom company-org-headings/case-sensitive t
   "Nil to ignore case when collecting completion candidates.
-Setting this variable to nil will impair the speed of candidates retrieval."
+Setting this variable to nil will impair the speed of candidates
+retrieval."
   :type 'boolean
   :group 'company-org-headings)
 
 (defcustom company-org-headings/show-headings-context t
   "Show the meta information in the minibuffer.
-Revealing the higher level heading to show the context of the candidate at point."
+Revealing the higher level heading to show the context of the
+candidate at point."
   :type 'boolean
   :group 'company-org-headings)
 
 ;; hooks
 (defcustom company-org-headings/create-alist-post-hook nil
-  "Hook to create candidates when `company-org-headings/search-directory' changes."
+  "Hook run after company successfully completes."
   :type 'hook
   :group 'company-org-headings)
 
@@ -171,6 +174,7 @@ Revealing the higher level heading to show the context of the candidate at point
       (setq res (concat res str)))
     res))
 
+;; ~~~~~~~~~~~~~~~~{  aggregrate headings function  }~~~~~~~~~~~~~~~~
 (defun company-org-headings/aggregate-headings (dir)
   "Aggregate headings from the org files in DIR."
   (cl-loop
@@ -203,7 +207,7 @@ Revealing the higher level heading to show the context of the candidate at point
 		     ,(when company-org-headings/show-headings-context
 			parent))))))))
 
-;; ~~~~~~~~~~~~~~~~~~~~~~~{  company backend  }~~~~~~~~~~~~~~~~~~~~~~~
+;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
 (defun company-org-headings/annotation (s)
   (format
    (concat " " company-org-headings/annotations-separator  " %s")
@@ -220,6 +224,7 @@ Revealing the higher level heading to show the context of the candidate at point
 	   (cadr (assoc candidate company-org-headings/alist)))))
 
 (defun company-org-headings/meta ()
+  "Show contextual information in the minibuffer."
   (let* ((parent (cadddr (assoc arg company-org-headings/alist)))
 	 (Npar (car parent))
 	 (Nhead (1+ (car parent)))
@@ -240,11 +245,23 @@ Revealing the higher level heading to show the context of the candidate at point
       'face (nth Nhead org-level-faces)))))
 
 (defun company-org-headings/insert-link (c)
-  "Transform the completion with `org-store-link'."
-  (let ((file (caddr (assoc c company-org-headings/alist))))
+  "Transform the completion with `org-store-link'.
+The description of the Org-mode link will be determined by
+`string-prefix-p' with all words in the completion string.
+Occasionally there may be multiple possible completions for the
+description, this function will take the first match."
+  (let* ((alist (assoc c company-org-headings/alist))
+	 (file (caddr alist))
+	 (s (let ((res ))
+	      (car
+	       (remq
+		nil
+		(mapcar (lambda (x) (if (string-prefix-p company-prefix x)
+				   (append res x)))
+			(cadr (assoc c company-org-headings/alist))))))))
     (delete-backward-char (string-width c))
     (org-insert-link
-     t (concat file "::*" c) c)))
+     t (concat file "::*" c) s)))
 
 ;;;###autoload
 (defun company-org-headings/create-alist ()
@@ -269,6 +286,7 @@ If you for example want to alter the candidates
 
 ;;;###autoload
 (defun company-org-headings (command &optional arg &rest ignored)
+  "`company-mode' completion back-end for Org-mode headings."
   (interactive (list 'interactive))
   ;; create a `company-org-headings/alist' if it doesn't yet exist
   (when (not company-org-headings/alist)
