@@ -111,7 +111,8 @@
 ;; customize
 (defgroup company-org-headings nil
   "Customization group for company-org-headings."
-  :group 'completion
+  :group 'matching
+  :group 'convenience
   :prefix "company-org-headings/")
 
 (defcustom company-org-headings/search-directory nil
@@ -177,35 +178,38 @@ candidate at point."
 ;; ~~~~~~~~~~~~~~~~{  aggregrate headings function  }~~~~~~~~~~~~~~~~
 (defun company-org-headings/aggregate-headings (dir)
   "Aggregate headings from the org files in DIR."
+  (if (not company-org-headings/search-directory)
+      (error "Specify a directory to collect headings from."))
   (cl-loop
-       for files in (directory-files dir t "\\.org$")
-       nconc
-       (with-temp-buffer
-	 (org-mode)
-	 (insert-file-contents files)
-	 (save-excursion
-	   (goto-char (point-min))
-	   (cl-loop
-		 while (re-search-forward org-complex-heading-regexp nil t)
-		 collect
-		 (let ((heading (nth 4 (org-heading-components)))
-		       (parent (save-excursion
-				 (org-up-heading-safe)
-				 (cons (nth 1 (org-heading-components))
-				       (nth 4 (org-heading-components))))))
-		   `(,heading
-		     ,(cl-remove-if
-		       ;; remove stopwords to allow for a more reliable candidates retrieval
-		       (lambda (s) (car (member s company-org-headings/stopwords)))
-		       (mapcar
-			(lambda (s)
-			  ;; remove the occasional parentheses and quotes
-			  (replace-regexp-in-string "[\]\[\\(\\)\'\\\"\{\}]+"
-						    "" s))
-			(split-string heading split-string-default-separators)))
-		     ,files
-		     ,(when company-org-headings/show-headings-context
-			parent))))))))
+   for files in (directory-files dir t "\\.org$")
+   nconc
+   (when (file-exists-p files)
+     (with-temp-buffer
+       (org-mode)
+       (insert-file-contents files)
+       (save-excursion
+	 (goto-char (point-min))
+	 (cl-loop
+	  while (re-search-forward org-complex-heading-regexp nil t)
+	  collect
+	  (let ((heading (nth 4 (org-heading-components)))
+		(parent (save-excursion
+			  (org-up-heading-safe)
+			  (cons (nth 1 (org-heading-components))
+				(nth 4 (org-heading-components))))))
+	    `(,heading
+	      ,(cl-remove-if
+		;; remove stopwords to allow for a more reliable candidates retrieval
+		(lambda (s) (car (member s company-org-headings/stopwords)))
+		(mapcar
+		 (lambda (s)
+		   ;; remove the occasional parentheses and quotes
+		   (replace-regexp-in-string "[\]\[\\(\\)\'\\\"\{\}]+"
+					     "" s))
+		 (split-string heading split-string-default-separators)))
+	      ,files
+	      ,(when company-org-headings/show-headings-context
+		 parent)))))))))
 
 ;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
 (defun company-org-headings/annotation (s)
@@ -258,7 +262,7 @@ description, this function will take the first match."
 		nil
 		(mapcar (lambda (x) (if (string-prefix-p company-prefix x)
 				   (append res x)))
-			(cadr (assoc c company-org-headings/alist))))))))
+			(cadr alist)))))))
     (delete-backward-char (string-width c))
     (org-insert-link
      t (concat file "::*" c) s)))
@@ -273,36 +277,37 @@ If you for example want to alter the candidates
 `company-org-headings' will provide, make use of the
 `company-org-headings/create-alist-post-hook'."
   (interactive)
-  (when company-org-headings/alist
-    (setq company-org-headings/alist ))
-  (save-some-buffers
-   t (file-in-directory-p (buffer-file-name)
-			  company-org-headings/search-directory))
+  (message "Creating a `company-org-headings/alist'...")
   (setq company-org-headings/alist (company-org-headings/aggregate-headings
-				    company-org-headings/search-directory))
+  				    company-org-headings/search-directory))
   (setq company-org-headings/candidates
 	(mapcar 'car company-org-headings/alist))
+  (message "Creating a `company-org-headings/alist'... done.")
   (run-hooks 'company-org-headings/create-alist-post-hook))
 
 ;;;###autoload
 (defun company-org-headings (command &optional arg &rest ignored)
   "`company-mode' completion back-end for Org-mode headings."
   (interactive (list 'interactive))
-  ;; create a `company-org-headings/alist' if it doesn't yet exist
-  (when (not company-org-headings/alist)
-    (company-org-headings/create-alist))
   (cl-case command
     (interactive (company-begin-backend 'company-org-headings))
     (prefix (and (eq major-mode 'org-mode)
-		 (when company-org-headings/restricted-to-directory
+		 (when (and
+			company-org-headings/search-directory
+			company-org-headings/restricted-to-directory
+			(buffer-file-name))
 		   (file-in-directory-p (buffer-file-name)
 					company-org-headings/search-directory))
 		 (company-grab-symbol)))
     (candidates
-     (cl-remove-if-not
-      (lambda (c) (company-org-headings/word-match arg c))
-      company-org-headings/candidates
-      ))
+     (progn
+       ;; create a `company-org-headings/alist' if it doesn't yet exist
+       (when (not company-org-headings/alist)
+	 (company-org-headings/create-alist))
+       (cl-remove-if-not
+	(lambda (c) (company-org-headings/word-match arg c))
+	company-org-headings/candidates
+	)))
     (meta
      (when company-org-headings/show-headings-context
        (company-org-headings/meta)))
