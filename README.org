@@ -7,6 +7,18 @@ This backend for ~company~ provides completion for Org-mode headings of org file
 
 [[http://mutbuerger.github.io/images/company-org-headings.gif][Screencapture]]
 
+** Installation
+#+BEGIN_SRC sh :results output
+git clone git@github.com:mutbuerger/company-org-headings.git
+#+END_SRC
+
+Since this backend is Org-mode specific, using the ~org-mode-hook~ makes sense:
+
+#+BEGIN_SRC elisp :results value
+(add-hook 'org-mode-hook
+	  (lambda () (set (make-local-variable 'company-backends)
+		     '((company-org-headings)))))
+#+END_SRC
 ** Completion
 ~company-org-headings~ provides prefix completion using ~string-prefix-p~ by all words in an Org-mode heading. A real fuzzy matching is not planned for this ~company-backend~.
 ** Stop Words
