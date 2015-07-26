@@ -5,7 +5,7 @@
 
 This backend for ~company~ provides completion for Org-mode headings of org files in a specified directory. This package is directed towards Org-mode users that keep their notes in multiple files and try to interconnect them with extensive linking. The idea behind this is making it as easy as possible to link new notes to the concurrent knowledge base in the process of writing them. This may be of great use when trying to create a knowledge base system similar to Niklas Luhmann's Zettelkasten that evolves to something like a "second brain" only by linking the bits of information together. Certainly there may be other ways to use this library.
 
-[[http://mutbuerger.github.io/images/company-org-headings.gif][Screencapture]]
+[[http://mutbuerger.github.io/images/company-org-headings.gif]]
 
 ** Installation
 #+BEGIN_SRC sh :results output

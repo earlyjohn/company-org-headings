@@ -222,6 +222,7 @@ candidate at point."
   (memq t (mapcar
 	   (if company-org-headings/case-sensitive
 	       (lambda (s) (string-prefix-p prefix s))
+	     ;; FIXME there may be a more elegant solution to this:
 	     (lambda (s) (or (string-prefix-p (downcase prefix) s)
 			(string-prefix-p (capitalize prefix) s)
 			(string-prefix-p (upcase prefix) s))))
