@@ -1,11 +1,11 @@
-;;; company-org-headings --- SUMMARY
+;;; company-org-headings --- completion backend for company.el
 
 
 ;; Copyright (c) 2015- Bernhard Pröll
 
 ;; Author: Bernhard Pröll
 ;; Maintainer: Bernhard Pröll
-;; URL: https://github.com/mutbuerger/smartparens-ess
+;; URL: https://github.com/mutbuerger/company-org-headings
 ;; Created: 2015-07-25
 ;; Version: 0.0.1
 ;; Keywords: completion, org-headings, abbrev, convenience
@@ -269,7 +269,7 @@ description, this function will take the first match."
 
 ;;;###autoload
 (defun company-org-headings/create-alist ()
-  "If `company-org-headings/alist' doesn't exist, create it.
+  "(Re-)create `company-org-headings/alist'.
 The buffers related to the
 `company-org-headings/search-directory' will be saved beforehand.
 
