@@ -8,7 +8,7 @@
 ;; URL: https://github.com/mutbuerger/company-org-headings
 ;; Created: 2015-07-25
 ;; Version: 0.0.1
-;; Keywords: matching, convenience
+;; Keywords: company abbrev convenience matching
 ;; Package-Requires: ((emacs "24.4") (cl-lib "0.5"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -111,8 +111,7 @@
 ;; customize
 (defgroup company-org-headings nil
   "Customization group for company-org-headings."
-  :group 'matching
-  :group 'convenience
+  :group 'company
   :prefix "company-org-headings/")
 
 (defcustom company-org-headings/search-directory nil
@@ -203,8 +202,11 @@ candidate at point."
 		  (mapcar
 		   (lambda (s)
 		     ;; remove the occasional parentheses and quotes
-		     (replace-regexp-in-string "[\]\[\\(\\)\'\\\"\{\}]+"
-					       "" s))
+		     ;; TODO add `org-emphasis-alist' elements
+		     ;; (mapconcat 'car org-emphasis-alist "")
+		     (replace-regexp-in-string
+		      "[\]\[\\(\\)\'\\\"\{\}]+"
+		      "" s))
 		   (split-string heading split-string-default-separators)))
 		,files
 		,(when company-org-headings/show-headings-context
@@ -219,9 +221,8 @@ candidate at point."
 
 (defun company-org-headings/word-match (prefix candidate)
   (memq t (mapcar
-	   (if company-org-headings/case-sensitive
-	       (lambda (s) (string-prefix-p prefix s))
-	     (lambda (s) (string-prefix-p prefix s 'ignore-case)))
+	   (lambda (s) (string-prefix-p prefix s
+				   (not company-org-headings/case-sensitive)))
 	   (cadr (assoc candidate company-org-headings/alist)))))
 
 (defun company-org-headings/meta ()
@@ -255,15 +256,14 @@ description, this function will take the first match."
 	 (file (cl-caddr alist))
 	 (s (let ((res ))
 	      (car
-	       (remq nil
-		     (mapcar
-		      (lambda (x)
-			(when
-			    (if company-org-headings/case-sensitive
-				(string-prefix-p company-prefix x)
-			      (string-prefix-p company-prefix x 'ignore-case))
+	       (remq
+		nil
+		(mapcar
+		 (lambda (x) (when (string-prefix-p
+			       company-prefix x
+			       (not company-org-headings/case-sensitive))
 			  (append res x)))
-		      (cadr alist)))))))
+		 (cadr alist)))))))
     (delete-char (- 0 (string-width c)))
     (org-insert-link
      t (concat file "::*" c) s)))
@@ -292,14 +292,28 @@ If you for example want to alter the candidates
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-org-headings))
-    (prefix (and (eq major-mode 'org-mode)
-		 (when (and
-			company-org-headings/search-directory
-			company-org-headings/restricted-to-directory
-			(buffer-file-name))
-		   (file-in-directory-p (buffer-file-name)
-					company-org-headings/search-directory))
-		 (company-grab-symbol)))
+    (prefix
+     (when
+	 (and
+	  (buffer-file-name)
+	  (eq major-mode 'org-mode)
+	  company-org-headings/search-directory
+	  ;; when the restriction is desired, test if file is in the directory
+	  (if company-org-headings/restricted-to-directory
+	      (file-in-directory-p (buffer-file-name)
+				   company-org-headings/search-directory)
+	    ;; else return t
+	    t))
+       (company-grab-symbol))
+     ;; (and (eq major-mode 'org-mode)
+     ;; 		 (when (and
+     ;; 			company-org-headings/search-directory
+     ;; 			company-org-headings/restricted-to-directory
+     ;; 			(buffer-file-name))
+     ;; 		   (file-in-directory-p (buffer-file-name)
+     ;; 					company-org-headings/search-directory))
+     ;; 		 (company-grab-symbol))
+     )
     (candidates
      (progn
        ;; create a `company-org-headings/alist' if it doesn't yet exist
