@@ -304,16 +304,7 @@ If you for example want to alter the candidates
 				   company-org-headings/search-directory)
 	    ;; else return t
 	    t))
-       (company-grab-symbol))
-     ;; (and (eq major-mode 'org-mode)
-     ;; 		 (when (and
-     ;; 			company-org-headings/search-directory
-     ;; 			company-org-headings/restricted-to-directory
-     ;; 			(buffer-file-name))
-     ;; 		   (file-in-directory-p (buffer-file-name)
-     ;; 					company-org-headings/search-directory))
-     ;; 		 (company-grab-symbol))
-     )
+       (company-grab-symbol)))
     (candidates
      (progn
        ;; create a `company-org-headings/alist' if it doesn't yet exist
