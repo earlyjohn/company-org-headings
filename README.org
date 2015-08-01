@@ -3,7 +3,7 @@
 
 * company-org-headings
 
-This backend for ~company~ provides completion for Org-mode headings of org files in a specified directory. This package is directed towards Org-mode users that keep their notes in multiple files and try to interconnect them with extensive linking. The idea behind this is making it as easy as possible to link new notes to the concurrent knowledge base in the process of writing them. This may be of great use when trying to create a knowledge base system similar to Niklas Luhmann's Zettelkasten that evolves to something like a "second brain" only by linking the bits of information together. Certainly there may be other ways to use this library.
+This backend for ~company~ provides completion for Org-mode headings of org files in a specified directory. The package is directed towards Org-mode users that keep their notes in multiple files and try to interconnect them with extensive linking. The idea behind this is making it as easy as possible to link new notes to the concurrent knowledge base in the process of writing them. This may be of great use when trying to create a knowledge base system similar to Niklas Luhmann's Zettelkasten that evolves to something like a "second brain" only by linking the bits of information together. Certainly there may be other ways to use this library.
 
 [[http://mutbuerger.github.io/images/company-org-headings.gif]]
 
@@ -26,6 +26,10 @@ To improve the performance of candidates retrieval and the meaningfulness of can
 ** Specify the Directory
 Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all Org-mode buffers.
 ** Performance
-Depending on the number of files that reside in the ~company-org-headings/search-directory~, the speed of candidates retrieval can be improved significantly by setting ~company-org-headings/no-cache~ to ~nil~ and ~company-org-headings/case-sensitive~ to ~t~ (default).
+Depending on the number of files that reside in the ~company-org-headings/search-directory~, the speed of candidates retrieval can be improved significantly by setting ~company-org-headings/no-cache~ to ~nil~.
 ** Show the Context of Headings
 Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading to show the context of the candidate at point in the minibuffer.
+** Case-Sensivity
+Set ~company-org-headings/case-sensitive~ to nil to allow case-insensitive matching of completion candidates.
+** What's Missing?
+As of now there is only one option to extend the ~alist~ to retrieve the completion candidates from: Rebuilding it as a whole (in an ~org-insert-heading-hook~ for example).

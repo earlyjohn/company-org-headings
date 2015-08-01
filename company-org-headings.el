@@ -8,7 +8,7 @@
 ;; URL: https://github.com/mutbuerger/company-org-headings
 ;; Created: 2015-07-25
 ;; Version: 0.0.1
-;; Keywords: completion, org-headings, abbrev, convenience
+;; Keywords: matching, convenience
 ;; Package-Requires: ((emacs "24.4") (cl-lib "0.5"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -144,9 +144,7 @@ Slows down candidates retrieval significantly."
   :group 'company-org-headings)
 
 (defcustom company-org-headings/case-sensitive t
-  "Nil to ignore case when collecting completion candidates.
-Setting this variable to nil will impair the speed of candidates
-retrieval."
+  "Nil to ignore case when collecting completion candidates."
   :type 'boolean
   :group 'company-org-headings)
 
@@ -179,58 +177,56 @@ candidate at point."
 (defun company-org-headings/aggregate-headings (dir)
   "Aggregate headings from the org files in DIR."
   (if (not company-org-headings/search-directory)
-      (error "Specify a directory to collect headings from."))
-  (cl-loop
-   for files in (directory-files dir t "\\.org$")
-   nconc
-   (when (file-exists-p files)
-     (with-temp-buffer
-       (org-mode)
-       (insert-file-contents files)
-       (save-excursion
-	 (goto-char (point-min))
-	 (cl-loop
-	  while (re-search-forward org-complex-heading-regexp nil t)
-	  collect
-	  (let ((heading (nth 4 (org-heading-components)))
-		(parent (save-excursion
-			  (org-up-heading-safe)
-			  (cons (nth 1 (org-heading-components))
-				(nth 4 (org-heading-components))))))
-	    `(,heading
-	      ,(cl-remove-if
-		;; remove stopwords to allow for a more reliable candidates retrieval
-		(lambda (s) (car (member s company-org-headings/stopwords)))
-		(mapcar
-		 (lambda (s)
-		   ;; remove the occasional parentheses and quotes
-		   (replace-regexp-in-string "[\]\[\\(\\)\'\\\"\{\}]+"
-					     "" s))
-		 (split-string heading split-string-default-separators)))
-	      ,files
-	      ,(when company-org-headings/show-headings-context
-		 parent)))))))))
+      (user-error "Specify a directory to collect headings from."))
+  (let ((org-mode-hook ))
+    (cl-loop
+     for files in (directory-files dir t "\\.org$")
+     nconc
+     (when (file-exists-p files)
+       (with-temp-buffer
+	 (org-mode)
+	 (insert-file-contents files)
+	 (save-excursion
+	   (goto-char (point-min))
+	   (cl-loop
+	    while (re-search-forward org-complex-heading-regexp nil t)
+	    collect
+	    (let ((heading (nth 4 (org-heading-components)))
+		  (parent (save-excursion
+			    (org-up-heading-safe)
+			    (cons (nth 1 (org-heading-components))
+				  (nth 4 (org-heading-components))))))
+	      `(,heading
+		,(cl-remove-if
+		  ;; remove stopwords to allow for a more reliable candidates retrieval
+		  (lambda (s) (car (member s company-org-headings/stopwords)))
+		  (mapcar
+		   (lambda (s)
+		     ;; remove the occasional parentheses and quotes
+		     (replace-regexp-in-string "[\]\[\\(\\)\'\\\"\{\}]+"
+					       "" s))
+		   (split-string heading split-string-default-separators)))
+		,files
+		,(when company-org-headings/show-headings-context
+		   parent))))))))))
 
 ;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
 (defun company-org-headings/annotation (s)
   (format
    (concat " " company-org-headings/annotations-separator  " %s")
    (file-name-base
-    (caddr (assoc s company-org-headings/alist)))))
+    (cl-caddr (assoc s company-org-headings/alist)))))
 
 (defun company-org-headings/word-match (prefix candidate)
   (memq t (mapcar
 	   (if company-org-headings/case-sensitive
 	       (lambda (s) (string-prefix-p prefix s))
-	     ;; FIXME there may be a more elegant solution to this:
-	     (lambda (s) (or (string-prefix-p (downcase prefix) s)
-			(string-prefix-p (capitalize prefix) s)
-			(string-prefix-p (upcase prefix) s))))
+	     (lambda (s) (string-prefix-p prefix s 'ignore-case)))
 	   (cadr (assoc candidate company-org-headings/alist)))))
 
 (defun company-org-headings/meta ()
   "Show contextual information in the minibuffer."
-  (let* ((parent (cadddr (assoc arg company-org-headings/alist)))
+  (let* ((parent (cl-cadddr (assoc arg company-org-headings/alist)))
 	 (Npar (car parent))
 	 (Nhead (1+ (car parent)))
 	 (child (if (not (string-equal (cdr parent) arg))
@@ -256,15 +252,19 @@ The description of the Org-mode link will be determined by
 Occasionally there may be multiple possible completions for the
 description, this function will take the first match."
   (let* ((alist (assoc c company-org-headings/alist))
-	 (file (caddr alist))
+	 (file (cl-caddr alist))
 	 (s (let ((res ))
 	      (car
-	       (remq
-		nil
-		(mapcar (lambda (x) (if (string-prefix-p company-prefix x)
-				   (append res x)))
-			(cadr alist)))))))
-    (delete-backward-char (string-width c))
+	       (remq nil
+		     (mapcar
+		      (lambda (x)
+			(when
+			    (if company-org-headings/case-sensitive
+				(string-prefix-p company-prefix x)
+			      (string-prefix-p company-prefix x 'ignore-case))
+			  (append res x)))
+		      (cadr alist)))))))
+    (delete-char (- 0 (string-width c)))
     (org-insert-link
      t (concat file "::*" c) s)))
 
@@ -318,8 +318,7 @@ If you for example want to alter the candidates
     (require-match 'never)
     (annotation (company-org-headings/annotation arg))
     (duplicates nil)
-    ;; need to avoid caching for `company-org-headings/word-match' to
-    ;; work properly - slows down candidates retrieval significantly
+    ;; company's caching slows down candidates retrieval significantly
     (no-cache company-org-headings/no-cache)))
 
 (provide 'company-org-headings)
