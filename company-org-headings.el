@@ -124,6 +124,11 @@
   :type 'boolean
   :group 'company-org-headings)
 
+(defcustom company-org-headings/use-in-capture-mode t
+  "Also complete in `org-capture-mode'."
+  :type 'boolean
+  :group 'company-org-headings)
+
 (defcustom company-org-headings/stopwords
   (append company-org-headings/stopwords-english
 	  company-org-headings/stopwords-german)
@@ -295,13 +300,21 @@ If you for example want to alter the candidates
     (prefix
      (when
 	 (and
-	  (buffer-file-name)
-	  (eq major-mode 'org-mode)
+	  (derived-mode-p 'org-mode)
+	  (or
+	   (when company-org-headings/use-in-capture-mode
+	     (and org-capture-mode
+		  (buffer-base-buffer (current-buffer))))
+	   (buffer-file-name))
 	  company-org-headings/search-directory
 	  ;; when the restriction is desired, test if file is in the directory
 	  (if company-org-headings/restricted-to-directory
-	      (file-in-directory-p (buffer-file-name)
-				   company-org-headings/search-directory)
+	      (or
+	       (when company-org-headings/use-in-capture-mode
+		 (and org-capture-mode
+		      (buffer-base-buffer (current-buffer))))
+	       (file-in-directory-p (buffer-file-name)
+				    company-org-headings/search-directory))
 	    ;; else return t
 	    t))
        (company-grab-symbol)))
