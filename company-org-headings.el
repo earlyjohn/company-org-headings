@@ -43,6 +43,7 @@
 
 
 (require 'org)
+(require 'org-capture)
 (require 'cl-lib)
 (require 'company)
 
@@ -147,7 +148,7 @@
   :group 'company-org-headings)
 
 (defcustom company-org-headings/case-sensitive t
-  "Nil to ignore case when collecting completion candidates."
+  "Nil for case-insensitive matching."
   :type 'boolean
   :group 'company-org-headings)
 
