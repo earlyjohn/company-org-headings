@@ -142,8 +142,7 @@
   :group 'company-org-headings)
 
 (defcustom company-org-headings/no-cache '(equal arg "")
-  "Avoid caching to match the prefix with every word of a candidate.
-Slows down candidates retrieval significantly."
+  "Save candidates in cache."
   :type 'boolean
   :group 'company-org-headings)
 
@@ -224,49 +223,49 @@ candidate at point."
    (file-name-base
     (cl-caddr (assoc s company-org-headings/alist)))))
 
-(defun company-org-headings/word-match (prefix candidate)
-  (memq t (mapcar
-	   (lambda (s) (string-prefix-p prefix s
-				   (not company-org-headings/case-sensitive)))
-	   (cadr (assoc candidate company-org-headings/alist)))))
+(defun company-org-headings/matching-candidates (prefix)
+  (let ((case-fold-search (not company-org-headings/case-sensitive)))
+    (cl-remove-if-not
+     (lambda (x) (string-match-p (regexp-quote prefix) x))
+     company-org-headings/candidates)))
 
 (defun company-org-headings/meta ()
   "Show contextual information in the minibuffer."
   (let* ((parent (cl-cadddr (assoc arg company-org-headings/alist)))
-	 (Npar (car parent))
-	 (Nhead (1+ (car parent)))
+	 (par (car parent))
+	 (head (1+ (car parent)))
 	 (child (if (not (string-equal (cdr parent) arg))
 		    (concat
 		     "\n"
 		     (company-org-headings/string-repeat
-		      "*" Nhead) " " arg)
+		      "*" head) " " arg)
 		  "")))
     (concat
      (propertize
       (concat
        (company-org-headings/string-repeat
-	"*" Npar) " " (cdr parent))
-      'face (nth Npar org-level-faces))
+	"*" par) " " (cdr parent))
+      'face (nth par org-level-faces))
      (propertize
       child
-      'face (nth Nhead org-level-faces)))))
+      'face (nth head org-level-faces)))))
 
 (defun company-org-headings/insert-link (c)
-  "Transform the completion with `org-store-link'.
+  "Transform the completion to an org link.
 The description of the Org-mode link will be determined by
-`string-prefix-p' with all words in the completion string.
+`string-match-p' with all words in the completion string.
 Occasionally there may be multiple possible completions for the
 description, this function will take the first match."
-  (let* ((alist (assoc c company-org-headings/alist))
+  (let* ((case-fold-search (not company-org-headings/case-sensitive))
+	 (alist (assoc c company-org-headings/alist))
 	 (file (cl-caddr alist))
 	 (s (let ((res ))
 	      (car
 	       (remq
 		nil
 		(mapcar
-		 (lambda (x) (when (string-prefix-p
-			       company-prefix x
-			       (not company-org-headings/case-sensitive))
+		 (lambda (x) (when (string-match-p
+			       (regexp-quote company-prefix) x)
 			  (append res x)))
 		 (cadr alist)))))))
     (delete-char (- 0 (string-width c)))
@@ -323,10 +322,7 @@ If you for example want to alter the candidates
        ;; create a `company-org-headings/alist' if it doesn't yet exist
        (when (not company-org-headings/alist)
 	 (company-org-headings/create-alist))
-       (cl-remove-if-not
-	(lambda (c) (company-org-headings/word-match arg c))
-	company-org-headings/candidates
-	)))
+       (company-org-headings/matching-candidates arg)))
     (meta
      (when company-org-headings/show-headings-context
        (company-org-headings/meta)))
@@ -336,7 +332,6 @@ If you for example want to alter the candidates
     (require-match 'never)
     (annotation (company-org-headings/annotation arg))
     (duplicates nil)
-    ;; company's caching slows down candidates retrieval significantly
     (no-cache company-org-headings/no-cache)))
 
 (provide 'company-org-headings)
