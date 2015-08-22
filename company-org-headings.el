@@ -175,8 +175,8 @@ This setting will significantly impair the speed of candidates retrieval."
   "Specify where the point after the link insertion should be.
 Set this variable to one of the following:
 
-inside: Point will be at the end of the link description.  You may
-change the description to your liking.
+inside: Point will be at the end of the link description.  From
+there, you may change the description to your liking.
 
 after: Point will be right after the link."
   :type '(choice (const :tag "Inside the org-link description." inside)
@@ -229,13 +229,13 @@ after: Point will be right after the link."
    (file-name-base
     (cadr (assoc s company-org-headings/alist)))))
 
-(defun company-org-headings/remove-stopwords ()
+(defun company-org-headings/remove-stopwords (str)
   (mapconcat
    'concat
    (cl-remove-if
     (lambda (x)
       (member x company-org-headings/stopwords))
-    (split-string x split-string-default-separators)) " "))
+    (split-string str split-string-default-separators)) " "))
 
 (defun company-org-headings/matching-candidates (prefix)
   (let ((case-fold-search (not company-org-headings/case-sensitive)))
@@ -243,7 +243,7 @@ after: Point will be right after the link."
      (lambda (x) (string-match-p
 	     (regexp-quote prefix)
 	     (if company-org-headings/ignore-stopwords
-		 (company-org-headings/remove-stopwords)
+		 (company-org-headings/remove-stopwords x)
 	       x)))
      company-org-headings/candidates)))
 
@@ -294,7 +294,7 @@ description, this function will take the first match."
     (when (eq
 	   company-org-headings/point-after-completion
 	   'inside)
-      (forward-char -2))))
+      (re-search-backward "]]"))))
 
 ;;;###autoload
 (defun company-org-headings/create-alist ()
