@@ -165,6 +165,12 @@ candidate at point."
   :type 'hook
   :group 'company-org-headings)
 
+(defcustom company-org-headings/ignore-stopwords nil
+  "Set to non-nil to inhibit completion on stopwords.
+This setting will significantly impair the speed of candidates retrieval."
+  :type 'boolean
+  :group 'company-org-headings)
+
 (defvar company-org-headings/alist nil
   "Variable to hold the org headings with according filename.")
 
@@ -201,38 +207,37 @@ candidate at point."
 			    (cons (nth 1 (org-heading-components))
 				  (nth 4 (org-heading-components))))))
 	      `(,heading
-		,(cl-remove-if
-		  ;; remove stopwords to allow for a more reliable candidates retrieval
-		  (lambda (s) (car (member s company-org-headings/stopwords)))
-		  (mapcar
-		   (lambda (s)
-		     ;; remove the occasional parentheses and quotes
-		     ;; TODO add `org-emphasis-alist' elements
-		     ;; (mapconcat 'car org-emphasis-alist "")
-		     (replace-regexp-in-string
-		      "[\]\[\\(\\)\'\\\"\{\}]+"
-		      "" s))
-		   (split-string heading split-string-default-separators)))
 		,files
-		,(when company-org-headings/show-headings-context
-		   parent))))))))))
+		,parent)))))))))
 
 ;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
 (defun company-org-headings/annotation (s)
   (format
    (concat " " company-org-headings/annotations-separator  " %s")
    (file-name-base
-    (cl-caddr (assoc s company-org-headings/alist)))))
+    (cadr (assoc s company-org-headings/alist)))))
+
+(defun company-org-headings/remove-stopwords ()
+  (mapconcat
+   'concat
+   (cl-remove-if
+    (lambda (x)
+      (member x company-org-headings/stopwords))
+    (split-string x split-string-default-separators)) " "))
 
 (defun company-org-headings/matching-candidates (prefix)
   (let ((case-fold-search (not company-org-headings/case-sensitive)))
     (cl-remove-if-not
-     (lambda (x) (string-match-p (regexp-quote prefix) x))
+     (lambda (x) (string-match-p
+	     (regexp-quote prefix)
+	     (if company-org-headings/ignore-stopwords
+		 (company-org-headings/remove-stopwords)
+	       x)))
      company-org-headings/candidates)))
 
 (defun company-org-headings/meta ()
   "Show contextual information in the minibuffer."
-  (let* ((parent (cl-cadddr (assoc arg company-org-headings/alist)))
+  (let* ((parent (cl-caddr (assoc arg company-org-headings/alist)))
 	 (par (car parent))
 	 (head (1+ (car parent)))
 	 (child (if (not (string-equal (cdr parent) arg))
@@ -259,7 +264,7 @@ Occasionally there may be multiple possible completions for the
 description, this function will take the first match."
   (let* ((case-fold-search (not company-org-headings/case-sensitive))
 	 (alist (assoc c company-org-headings/alist))
-	 (file (cl-caddr alist))
+	 (file (cadr alist))
 	 (s (let ((res ))
 	      (car
 	       (remq
@@ -268,7 +273,9 @@ description, this function will take the first match."
 		 (lambda (x) (when (string-match-p
 			       (regexp-quote company-prefix) x)
 			  (append res x)))
-		 (cadr alist)))))))
+		 (split-string
+		  (car alist)
+		  split-string-default-separators)))))))
     (delete-char (- 0 (string-width c)))
     (org-insert-link
      t (concat file "::*" c) s)))

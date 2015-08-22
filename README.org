@@ -22,7 +22,7 @@ Since this backend is Org-mode specific, using the ~org-mode-hook~ makes sense:
 ** Completion
 ~company-org-headings~ provides completion using ~string-match-p~. A real fuzzy matching is not planned for this ~company-backend~.
 ** Stop Words
-To improve the performance of candidates retrieval and the meaningfulness of candidates, ~company-org-headings~ removes stop words (most common words in a language) from the candidates. You may extend the ~company-org-headings/stopwords~ to your needs.
+To improve the meaningfulness of candidates, ~company-org-headings~ ignores stop words (most common words in a language) from the candidates when ~company-org-headings/ignore-stopwords~ is set to a non-nil value. However, this setting will impair the speed of candidates retrieval. You may extend the ~company-org-headings/stopwords~ to your needs.
 ** Specify the Directory
 Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all Org-mode buffers.
 ** Show the Context of Headings
