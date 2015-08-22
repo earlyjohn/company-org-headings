@@ -171,6 +171,18 @@ This setting will significantly impair the speed of candidates retrieval."
   :type 'boolean
   :group 'company-org-headings)
 
+(defcustom company-org-headings/point-after-completion 'inside
+  "Specify where the point after the link insertion should be.
+Set this variable to one of the following:
+
+inside: Point will be at the end of the link description.  You may
+change the description to your liking.
+
+after: Point will be right after the link."
+  :type '(choice (const :tag "Inside the org-link description." inside)
+		 (const :tag "After the org-link." after))
+  :group 'company-org-headings)
+
 (defvar company-org-headings/alist nil
   "Variable to hold the org headings with according filename.")
 
@@ -278,7 +290,11 @@ description, this function will take the first match."
 		  split-string-default-separators)))))))
     (delete-char (- 0 (string-width c)))
     (org-insert-link
-     t (concat file "::*" c) s)))
+     t (concat file "::*" c) s)
+    (when (eq
+	   company-org-headings/point-after-completion
+	   'inside)
+      (forward-char -2))))
 
 ;;;###autoload
 (defun company-org-headings/create-alist ()
