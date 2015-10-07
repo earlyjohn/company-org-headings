@@ -26,7 +26,7 @@ To improve the meaningfulness of candidates, ~company-org-headings~ ignores stop
 ** Specify the Directory
 Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all Org-mode buffers.
 ** Show the Context of Headings
-Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading to show the context of the candidate at point in the minibuffer.
+Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading to show the context of the candidate at point in the minibuffer. The default is set to ~path~ and will provide contextual information like the ~org-display-outline-path~ command does.
 ** Case-Sensivity
 Set ~company-org-headings/case-sensitive~ to nil to allow case-insensitive matching of completion candidates.
 ** What's Missing?
