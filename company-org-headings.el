@@ -134,7 +134,7 @@
   (append company-org-headings/stopwords-english
 	  company-org-headings/stopwords-german)
   "Collection of stopwords to be removed from the candidates."
-  :type 'list
+  :type 'sexp
   :group 'company-org-headings)
 
 (defcustom company-org-headings/annotations-separator "▶"
@@ -152,11 +152,26 @@
   :type 'boolean
   :group 'company-org-headings)
 
-(defcustom company-org-headings/show-headings-context t
-  "Show the meta information in the minibuffer.
-Revealing the higher level heading to show the context of the
-candidate at point."
-  :type 'boolean
+(defcustom company-org-headings/show-headings-context 'path
+  "Show the meta information in the echo area.
+Revealing the higher level heading(s) to show the context of the
+candidate at point.
+
+The default is set to \"path\" to avoid the constant resizing of
+the minibuffer resp. the echo area when you are switching through
+several completion candidates. It displays the path as the
+`org-display-outline-path' command does.
+
+The default setting of this variable is the most time-consuming
+choice when it comes to building the
+`company-org-headings/alist'.
+
+Consider rebuilding the `company-org-headings/alist' when
+changing your choice."
+  :type '(choice
+	  (const :tag "As path" path)
+	  (const :tag "As outline" outline)
+	  (other :tag "No" nil))
   :group 'company-org-headings)
 
 ;; hooks
@@ -172,15 +187,16 @@ This setting will significantly impair the speed of candidates retrieval."
   :group 'company-org-headings)
 
 (defcustom company-org-headings/point-after-completion 'inside
-  "Specify where the point after the link insertion should be.
+  "Specify where the point after the link insertion should be located.
 Set this variable to one of the following:
 
-inside: Point will be at the end of the link description.  From
-there, you may change the description to your liking.
+inside: Point will be located at the end of the link description.
+From there, you may change the description to your liking.
 
-after: Point will be right after the link."
-  :type '(choice (const :tag "Inside the org-link description." inside)
-		 (const :tag "After the org-link." after))
+after: Point will be located right after the link."
+  :type '(choice
+	  (const :tag "Inside the org-link description." inside)
+	  (const :tag "After the org-link." after))
   :group 'company-org-headings)
 
 (defvar company-org-headings/alist nil
@@ -220,7 +236,12 @@ after: Point will be right after the link."
 				  (nth 4 (org-heading-components))))))
 	      `(,heading
 		,files
-		,parent)))))))))
+		,(cond
+		  ((equal company-org-headings/show-headings-context 'path)
+		   (org-get-outline-path))
+		  ((equal company-org-headings/show-headings-context 'outline)
+		   parent)
+		  (t nil)))))))))))
 
 ;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
 (defun company-org-headings/annotation (s)
@@ -248,25 +269,28 @@ after: Point will be right after the link."
      company-org-headings/candidates)))
 
 (defun company-org-headings/meta ()
-  "Show contextual information in the minibuffer."
-  (let* ((parent (cl-caddr (assoc arg company-org-headings/alist)))
-	 (par (car parent))
-	 (head (1+ (car parent)))
-	 (child (if (not (string-equal (cdr parent) arg))
-		    (concat
-		     "\n"
-		     (company-org-headings/string-repeat
-		      "*" head) " " arg)
-		  "")))
-    (concat
-     (propertize
+  "Show contextual information in the echo area."
+  (if (equal company-org-headings/show-headings-context 'path)
+      (org-format-outline-path
+       (cl-caddr (assoc arg company-org-headings/alist)))
+    (let* ((parent (cl-caddr (assoc arg company-org-headings/alist)))
+	   (par (car parent))
+	   (head (1+ (car parent)))
+	   (child (if (not (string-equal (cdr parent) arg))
+		      (concat
+		       "\n"
+		       (company-org-headings/string-repeat
+			"*" head) " " arg)
+		    "")))
       (concat
-       (company-org-headings/string-repeat
-	"*" par) " " (cdr parent))
-      'face (nth par org-level-faces))
-     (propertize
-      child
-      'face (nth head org-level-faces)))))
+       (propertize
+	(concat
+	 (company-org-headings/string-repeat
+	  "*" par) " " (cdr parent))
+	'face (nth par org-level-faces))
+       (propertize
+	child
+	'face (nth head org-level-faces))))))
 
 (defun company-org-headings/insert-link (c)
   "Transform the completion to an org link.
