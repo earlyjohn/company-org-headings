@@ -45,6 +45,7 @@
 (require 'org)
 (require 'org-capture)
 (require 'cl-lib)
+(require 'dash)
 (require 'company)
 
 (defconst company-org-headings/stopwords-german
@@ -166,8 +167,9 @@ The default setting of this variable is the most time-consuming
 choice when it comes to building the
 `company-org-headings/alist'.
 
-Consider rebuilding the `company-org-headings/alist' when
-changing your choice."
+Consider rebuilding the `company-org-headings/alist' with the
+`company-org-headings/create-alist' command when changing your
+choice."
   :type '(choice
 	  (const :tag "As path" path)
 	  (const :tag "As outline" outline)
@@ -182,7 +184,9 @@ changing your choice."
 
 (defcustom company-org-headings/ignore-stopwords nil
   "Set to non-nil to inhibit completion on stopwords.
-This setting will significantly impair the speed of candidates retrieval."
+In fact with this variable set to `t' the backend will only offer
+candidates whenever the symbol at point is NOT a prefix of any
+stopword."
   :type 'boolean
   :group 'company-org-headings)
 
@@ -195,8 +199,8 @@ From there, you may change the description to your liking.
 
 after: Point will be located right after the link."
   :type '(choice
-	  (const :tag "Inside the org-link description." inside)
-	  (const :tag "After the org-link." after))
+	  (const :tag "Inside the org-link description" inside)
+	  (const :tag "After the org-link" after))
   :group 'company-org-headings)
 
 (defvar company-org-headings/alist nil
@@ -250,23 +254,17 @@ after: Point will be located right after the link."
    (file-name-base
     (cadr (assoc s company-org-headings/alist)))))
 
-(defun company-org-headings/remove-stopwords (str)
-  (mapconcat
-   'concat
-   (cl-remove-if
-    (lambda (x)
-      (member x company-org-headings/stopwords))
-    (split-string str split-string-default-separators)) " "))
-
 (defun company-org-headings/matching-candidates (prefix)
-  (let ((case-fold-search (not company-org-headings/case-sensitive)))
-    (cl-remove-if-not
-     (lambda (x) (string-match-p
-	     (regexp-quote prefix)
-	     (if company-org-headings/ignore-stopwords
-		 (company-org-headings/remove-stopwords x)
-	       x)))
-     company-org-headings/candidates)))
+  (let ((case-fold-search (not company-org-headings/case-sensitive))
+	(fun (lambda () (cl-remove-if-not
+		    (lambda (x) (string-match-p (regexp-quote prefix) x))
+		    company-org-headings/candidates))))
+    (if company-org-headings/ignore-stopwords
+	(unless
+	    (-any? (lambda (x) (string-prefix-p prefix x))
+		   company-org-headings/stopwords)
+	  (funcall fun))
+      (funcall fun))))
 
 (defun company-org-headings/meta ()
   "Show contextual information in the echo area."
@@ -330,12 +328,12 @@ If you for example want to alter the candidates
 `company-org-headings' will provide, make use of the
 `company-org-headings/create-alist-post-hook'."
   (interactive)
-  (message "Creating a `company-org-headings/alist'...")
+  (message "Creating a company-org-headings/alist...")
   (setq company-org-headings/alist (company-org-headings/aggregate-headings
   				    company-org-headings/search-directory))
   (setq company-org-headings/candidates
 	(mapcar 'car company-org-headings/alist))
-  (message "Creating a `company-org-headings/alist'... done.")
+  (message "Creating a company-org-headings/alist... done.")
   (run-hooks 'company-org-headings/create-alist-post-hook))
 
 ;;;###autoload
