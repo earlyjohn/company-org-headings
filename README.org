@@ -7,7 +7,7 @@ This backend for ~company~ provides completion for Org-mode headings of org file
 
 [[http://mutbuerger.github.io/images/company-org-headings.gif]]
 
-** Installation
+*** Installation
 #+BEGIN_SRC sh :results output
 git clone git@github.com:mutbuerger/company-org-headings.git
 #+END_SRC
@@ -19,15 +19,15 @@ Since this backend is Org-mode specific, using the ~org-mode-hook~ makes sense:
 	  (lambda () (set (make-local-variable 'company-backends)
 		     '((company-org-headings)))))
 #+END_SRC
-** Completion
+*** Completion
 ~company-org-headings~ provides completion using ~string-match-p~. A real fuzzy matching is not planned for this ~company-backend~.
-** Stop Words
+*** Stop Words
 To improve the meaningfulness of candidates, ~company-org-headings~ ignores stop words (most common words in a language) from the candidates when ~company-org-headings/ignore-stopwords~ is set to a non-nil value. In fact with this variable set to ~t~ the backend will only offer candidates whenever the symbol at point is *not* a prefix of any stopword. You may extend the ~company-org-headings/stopwords~ to your needs.
-** Specify the Directory
+*** Specify the Directory
 Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all Org-mode buffers.
-** Show the Context of Headings
+*** Show the Context of Headings
 Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading to show the context of the candidate at point in the minibuffer. The default is set to ~path~ and will provide contextual information like the ~org-display-outline-path~ command does.
-** Case-Sensivity
+*** Case-Sensivity
 Set ~company-org-headings/case-sensitive~ to nil to allow case-insensitive matching of completion candidates.
-** What's Missing?
+*** What's Missing?
 As of now there is only one option to extend the ~alist~ to retrieve the completion candidates from: Rebuilding it as a whole (in an ~org-insert-heading-hook~ for example).
