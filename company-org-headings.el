@@ -210,7 +210,7 @@ after: Point will be located right after the link."
   "Candidates the `company-org-headings/backend' will use.")
 
 (defun company-org-headings/string-repeat (str n)
-  (let ((res ))
+  (let (res)
     (dotimes (i n)
       (setq res (concat res str)))
     res))
@@ -220,7 +220,7 @@ after: Point will be located right after the link."
   "Aggregate headings from the org files in DIR."
   (if (not company-org-headings/search-directory)
       (user-error "Specify a directory to collect headings from."))
-  (let ((org-mode-hook ))
+  (let (org-mode-hook)
     (cl-loop
      for files in (directory-files dir t "\\.org$")
      nconc
@@ -299,7 +299,7 @@ description, this function will take the first match."
   (let* ((case-fold-search (not company-org-headings/case-sensitive))
 	 (alist (assoc c company-org-headings/alist))
 	 (file (cadr alist))
-	 (s (let ((res ))
+	 (s (let (res)
 	      (car
 	       (remq
 		nil
