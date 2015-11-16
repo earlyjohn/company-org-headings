@@ -176,12 +176,6 @@ choice."
 	  (other :tag "No" nil))
   :group 'company-org-headings)
 
-;; hooks
-(defcustom company-org-headings/create-alist-post-hook nil
-  "Hook run after company successfully completes."
-  :type 'hook
-  :group 'company-org-headings)
-
 (defcustom company-org-headings/ignore-stopwords nil
   "Set to non-nil to inhibit completion on stopwords.
 In fact with this variable set to `t' the backend will only offer
@@ -201,6 +195,12 @@ after: Point will be located right after the link."
   :type '(choice
 	  (const :tag "Inside the org-link description" inside)
 	  (const :tag "After the org-link" after))
+  :group 'company-org-headings)
+
+;; hook(s)
+(defcustom company-org-headings/create-alist-post-hook nil
+  "Hook run after company successfully completes."
+  :type 'hook
   :group 'company-org-headings)
 
 (defvar company-org-headings/alist nil
@@ -328,7 +328,10 @@ If you for example want to alter the candidates
 `company-org-headings' will provide, make use of the
 `company-org-headings/create-alist-post-hook'."
   (interactive)
-  (message "Creating a company-org-headings/alist...")
+  (message (concat "Creating a "
+		   (propertize "company-org-headings/alist"
+			       'face (car org-level-faces))
+		   "..."))
   (setq company-org-headings/alist (company-org-headings/aggregate-headings
   				    company-org-headings/search-directory))
   (setq company-org-headings/candidates
