@@ -7,7 +7,7 @@
 ;; Maintainer: Bernhard Pröll
 ;; URL: https://github.com/mutbuerger/company-org-headings
 ;; Created: 2015-07-25
-;; Version: 0.0.1
+;; Version: 0.1.0
 ;; Keywords: company abbrev convenience matching
 ;; Package-Requires: ((emacs "24.4") (cl-lib "0.5"))
 
@@ -204,7 +204,7 @@ after: Point will be located right after the link."
   :group 'company-org-headings)
 
 (defvar company-org-headings/alist nil
-  "Variable to hold the org headings with according filename.")
+  "Variable to hold the org headings with according file.")
 
 (defvar company-org-headings/candidates nil
   "Candidates the `company-org-headings/backend' will use.")
@@ -215,39 +215,72 @@ after: Point will be located right after the link."
       (setq res (concat res str)))
     res))
 
-;; ~~~~~~~~~~~~~~~~{  aggregrate headings function  }~~~~~~~~~~~~~~~~
-(defun company-org-headings/aggregate-headings (dir)
+;; ###########################  parsing  ###########################
+
+(defun company-org-headings/collect-components (file)
+  (let ((heading (nth 4 (org-heading-components)))
+	(parent
+	 (save-excursion
+	   (org-up-heading-safe)
+	   (cons (nth 1 (org-heading-components))
+		 (nth 4 (org-heading-components))))))
+    `(,heading
+      ,file
+      ,(cond
+	((equal company-org-headings/show-headings-context 'path)
+	 (org-get-outline-path))
+	((equal company-org-headings/show-headings-context 'outline)
+	 parent)
+	(t nil)))))
+
+(defun company-org-headings/parse-buffer-file (file)
+  (with-temp-buffer
+    (org-mode)
+    (insert-file-contents file)
+    (save-excursion
+      (goto-char (point-min))
+      (cl-loop
+       while (re-search-forward org-complex-heading-regexp nil t)
+       collect
+       (company-org-headings/collect-components file)))))
+
+(defun company-org-headings/aggregate-headings-in-dir (dir)
   "Aggregate headings from the org files in DIR."
-  (if (not company-org-headings/search-directory)
-      (user-error "Specify a directory to collect headings from."))
-  (let (org-mode-hook)
+  (let ((org-mode-hook nil))
     (cl-loop
      for files in (directory-files dir t "\\.org$")
      nconc
      (when (file-exists-p files)
-       (with-temp-buffer
-	 (org-mode)
-	 (insert-file-contents files)
-	 (save-excursion
-	   (goto-char (point-min))
-	   (cl-loop
-	    while (re-search-forward org-complex-heading-regexp nil t)
-	    collect
-	    (let ((heading (nth 4 (org-heading-components)))
-		  (parent (save-excursion
-			    (org-up-heading-safe)
-			    (cons (nth 1 (org-heading-components))
-				  (nth 4 (org-heading-components))))))
-	      `(,heading
-		,files
-		,(cond
-		  ((equal company-org-headings/show-headings-context 'path)
-		   (org-get-outline-path))
-		  ((equal company-org-headings/show-headings-context 'outline)
-		   parent)
-		  (t nil)))))))))))
+       (company-org-headings/parse-buffer-file files)))))
 
-;; ~~~~~~~~~~~~~~~~~~~~~~{  backend functions  }~~~~~~~~~~~~~~~~~~~~~~
+(defun company-org-headings/in-search-dir-and-org-p (file)
+  ;; in case the `buffer-file-name' returns nil (e.g. in a capture
+  ;; buffer) this saves me from a stringp nil error
+  (when file
+      (if (file-exists-p file)
+	  (and (string= (file-name-extension file) "org")
+	       (member (file-name-nondirectory file)
+		       (directory-files company-org-headings/search-directory)))
+	(user-error
+	 "There is no corresponding org file for the current buffer."))))
+
+;;;###autoload
+(defun company-org-headings/append-current-buffer-file-headings ()
+  "Append heading elements in the current buffer to the alist.
+Insert the elements at the head of the
+`company-org-headings/alist' if not already in the alist."
+  (interactive)
+  (when
+    (company-org-headings/in-search-dir-and-org-p (buffer-file-name))
+    (mapc
+     ;; default :test is `eql' that won't help in this case
+     (lambda (x) (cl-pushnew x company-org-headings/alist :test 'equal))
+     (company-org-headings/parse-buffer-file (buffer-file-name)))
+    (setq company-org-headings/candidates
+	  (mapcar 'car company-org-headings/alist))))
+
+;; #########################  completion  #########################
+
 (defun company-org-headings/annotation (s)
   (format
    (concat " " company-org-headings/annotations-separator  " %s")
@@ -328,12 +361,15 @@ If you for example want to alter the candidates
 `company-org-headings' will provide, make use of the
 `company-org-headings/create-alist-post-hook'."
   (interactive)
+  (when (not company-org-headings/search-directory)
+    (user-error "Specify a directory to collect headings from."))
   (message (concat "Creating a "
 		   (propertize "company-org-headings/alist"
 			       'face (car org-level-faces))
 		   "..."))
-  (setq company-org-headings/alist (company-org-headings/aggregate-headings
-  				    company-org-headings/search-directory))
+  (setq company-org-headings/alist
+	(company-org-headings/aggregate-headings-in-dir
+	 company-org-headings/search-directory))
   (setq company-org-headings/candidates
 	(mapcar 'car company-org-headings/alist))
   (message "Creating a company-org-headings/alist... done.")
