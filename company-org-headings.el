@@ -7,7 +7,7 @@
 ;; Maintainer: Bernhard Pröll
 ;; URL: https://github.com/mutbuerger/company-org-headings
 ;; Created: 2015-07-25
-;; Version: 0.1.0
+;; Version: 0.2.0
 ;; Keywords: company abbrev convenience matching
 ;; Package-Requires: ((emacs "24.4") (cl-lib "0.5"))
 
@@ -138,7 +138,7 @@
   :type 'sexp
   :group 'company-org-headings)
 
-(defcustom company-org-headings/annotations-separator "▶"
+(defcustom company-org-headings/annotations-separator "▷"
   "String to separate the annotations from the candidates."
   :type 'string
   :group 'company-org-headings)
@@ -176,7 +176,7 @@ choice."
 	  (other :tag "No" nil))
   :group 'company-org-headings)
 
-(defcustom company-org-headings/ignore-stopwords nil
+(defcustom company-org-headings/ignore-stopwords t
   "Set to non-nil to inhibit completion on stopwords.
 In fact with this variable set to `t' the backend will only offer
 candidates whenever the symbol at point is NOT a prefix of any
@@ -184,7 +184,7 @@ stopword."
   :type 'boolean
   :group 'company-org-headings)
 
-(defcustom company-org-headings/point-after-completion 'inside
+(defcustom company-org-headings/point-after-completion 'after
   "Specify where the point after the link insertion should be located.
 Set this variable to one of the following:
 
@@ -197,17 +197,62 @@ after: Point will be located right after the link."
 	  (const :tag "After the org-link" after))
   :group 'company-org-headings)
 
+(defcustom company-org-headings/link-description 'full
+  "Specify the description part of an org link.
+There are two options to complete the link's description:
+
+full: The link description is the complete heading text to link
+refers to.
+
+word: The link description is the word in the candidate that
+matches the string at point."
+  :type '(choice
+	  (const :tag "The whole heading text" full)
+	  (const :tag "The word that matches"  word))
+  :group 'company-org-headings)
+
+(defcustom company-org-headings/idle-time-before-parsing 15
+  "Seconds of idle-time before the parser starts collecting data."
+  :type 'float
+  :group 'company-org-headings)
+
+(defcustom company-org-headings/rebuild-alist-on-idle-p 'rebuild
+  "Renew the idle timer whenever retrieving candidates.
+There are two choices to keep the alist up to date:
+
+append: Heading elements in the currently visited file are
+appended to the alist if they are not there yet.
+
+rebuild: Parse the whole directory again and append new heading
+elements.
+
+A value of nil will inhibit the recurring parsing, leaving you
+with the alist built at the very beginning."
+  :type '(choice
+	  (const :tag "Append headings in currently visited file" append)
+	  (const :tag "Rebuild the alist as a whole" rebuild)
+	  (const :tag "Build the alist only once" nil))
+  :group 'company-org-headings)
+
 ;; hook(s)
-(defcustom company-org-headings/create-alist-post-hook nil
-  "Hook run after company successfully completes."
+(defcustom company-org-headings/collect-data-post-hook nil
+  "Hook run after `company-org-headings/alist' has been successfully built."
   :type 'hook
   :group 'company-org-headings)
 
+
 (defvar company-org-headings/alist nil
-  "Variable to hold the org headings with according file.")
+  "Variable to hold the collected data from org files.")
 
 (defvar company-org-headings/candidates nil
   "Candidates the `company-org-headings/backend' will use.")
+
+(defvar company-org-headings/parser-state nil
+  "Ensure something like a state by saving the currently parsed file.")
+
+(defvar company-org-headings/idle-timer nil
+  "Variable to hold the timer.")
+
 
 (defun company-org-headings/string-repeat (str n)
   (let (res)
@@ -244,14 +289,97 @@ after: Point will be located right after the link."
        collect
        (company-org-headings/collect-components file)))))
 
-(defun company-org-headings/aggregate-headings-in-dir (dir)
-  "Aggregate headings from the org files in DIR."
-  (let ((org-mode-hook nil))
-    (cl-loop
-     for files in (directory-files dir t "\\.org$")
-     nconc
-     (when (file-exists-p files)
-       (company-org-headings/parse-buffer-file files)))))
+(defun company-org-headings/parse-message (secs)
+  (let* ((idl  (- secs company-org-headings/idle-time-before-parsing))
+	 (dots (% idl 15)))
+    (message
+     (concat
+      (propertize "company-org-headings"
+		  'face (car	org-level-faces))
+      " is collecting…    "
+      (company-org-headings/string-repeat " " dots)
+      (propertize "ᗣ"	'face (nth 5	org-level-faces))
+      (propertize "ᗣ"	'face (nth 4	org-level-faces))
+      (propertize "ᗣ"	'face (nth 3	org-level-faces))
+      (propertize " ᗧ"	'face (cadr	org-level-faces))
+      (company-org-headings/string-repeat
+       "·" (- 15 dots)) "··"))))
+
+(defun company-org-headings/file-to-parse ()
+  (let ((files
+	 ;; remove temporary files
+	 (-filter
+	  'file-exists-p
+	  (directory-files company-org-headings/search-directory t "\\.org$"))))
+    (car-safe
+     (cond
+      (company-org-headings/parser-state
+       ;; subset the tail of the list; beginning from where we stopped
+       ;; parsing, incrementally reducing the files to parse and make
+       ;; progress towards the base case, that is the empty list
+       (cdr-safe
+	(--drop-while
+	 (not (equal it company-org-headings/parser-state)) files)))
+      ;; if only headings in the currently visited file should be
+      ;; appended to the alist, check whether the alist has been
+      ;; built already
+      ((and (eq company-org-headings/rebuild-alist-on-idle-p 'append)
+	    (cdr-safe files)
+	    (cdr-safe company-org-headings/alist)
+	    (member (buffer-file-name) files))
+       (list (buffer-file-name)))
+      ;; with 'rebuild option provide all directory-files
+      ((or (eq company-org-headings/rebuild-alist-on-idle-p 'rebuild)
+	   ;; else only return files if alist doesn't exist yet
+	   (not company-org-headings/alist))
+       files)))))
+
+(defun company-org-headings/collect-data ()
+  "Collect headings from org files."
+  (let ((file (company-org-headings/file-to-parse))
+	(secs (car (decode-time (current-idle-time)))))
+    ;; break condition: cancel timer when there are no files left;
+    ;; this is the base case
+    (if (not file)
+	(progn
+	  ;; clear state
+	  (setq company-org-headings/parser-state nil)
+	  ;; and clear echo area
+	  (run-with-timer 1 nil 'message nil)
+	  (run-hooks 'company-org-headings/collect-data-post-hook)
+	  (cancel-timer company-org-headings/idle-timer))
+      ;; invoke message only once per second while parsing
+      (unless (and
+	       timer-list
+	       (equal (aref (car timer-list) 5)
+		      'company-org-headings/parse-message))
+	(run-with-timer 1 nil 'company-org-headings/parse-message secs))
+      (mapc
+       (lambda (x)
+	 ;; push to the alist only if it's not already there
+	 ;; default :test is `eql' that won't help in this case
+	 (cl-pushnew x company-org-headings/alist :test 'equal))
+       (company-org-headings/parse-buffer-file file))
+      (setq company-org-headings/parser-state file)
+      (setq company-org-headings/candidates
+	    (mapcar 'car company-org-headings/alist))
+      ;; recursively set timer that calls the collect defun
+      ;; immediately because SECS is <= `current-idle-time'. this
+      ;; allows for interrupting after every recursion and avoids
+      ;; using up the stack granted by `max-lisp-eval-depth'
+      (company-org-headings/set-idle-timer))))
+
+;;;###autoload
+(defun company-org-headings/set-idle-timer (&optional secs)
+  "Set timer to collect data in idle time.
+Save the timer to a variable. This allows us to cancel the timer
+whenever necessary."
+  (interactive)
+  (setq
+   company-org-headings/idle-timer
+   (run-with-idle-timer
+    (or secs company-org-headings/idle-time-before-parsing) nil
+    'company-org-headings/collect-data)))
 
 (defun company-org-headings/in-search-dir-and-org-p (file)
   ;; in case the `buffer-file-name' returns nil (e.g. in a capture
@@ -265,25 +393,30 @@ after: Point will be located right after the link."
 	 "There is no corresponding org file for the current buffer."))))
 
 ;;;###autoload
-(defun company-org-headings/append-current-buffer-file-headings ()
-  "Append heading elements in the current buffer to the alist.
-Insert the elements at the head of the
-`company-org-headings/alist' if not already in the alist."
+(defun company-org-headings/append-current-file-headings ()
+  "Collect heading elements in the currently visited file immediately.
+Append the elements to the `company-org-headings/alist' if not
+already there.
+
+This command is useful when you want to add newly created
+headings to the completion candidates immediately after creating
+them."
   (interactive)
-  (when
-    (company-org-headings/in-search-dir-and-org-p (buffer-file-name))
+  (when (company-org-headings/in-search-dir-and-org-p (buffer-file-name))
     (mapc
-     ;; default :test is `eql' that won't help in this case
-     (lambda (x) (cl-pushnew x company-org-headings/alist :test 'equal))
+     (lambda (x)
+       ;; default :test is `eql' that won't help in this case
+       (cl-pushnew x company-org-headings/alist :test 'equal))
      (company-org-headings/parse-buffer-file (buffer-file-name)))
-    (setq company-org-headings/candidates
-	  (mapcar 'car company-org-headings/alist))))
+    (setq
+     company-org-headings/candidates
+     (mapcar 'car company-org-headings/alist))))
 
 ;; #########################  completion  #########################
 
 (defun company-org-headings/annotation (s)
   (format
-   (concat " " company-org-headings/annotations-separator  " %s")
+   (concat " " company-org-headings/annotations-separator " %s")
    (file-name-base
     (cadr (assoc s company-org-headings/alist)))))
 
@@ -332,17 +465,18 @@ description, this function will take the first match."
   (let* ((case-fold-search (not company-org-headings/case-sensitive))
 	 (alist (assoc c company-org-headings/alist))
 	 (file (cadr alist))
-	 (s (let (res)
-	      (car
-	       (remq
-		nil
-		(mapcar
-		 (lambda (x) (when (string-match-p
-			       (regexp-quote company-prefix) x)
-			  (append res x)))
-		 (split-string
-		  (car alist)
-		  split-string-default-separators)))))))
+	 (s (if (eq company-org-headings/link-description 'full) c
+	      (let (res)
+		(car
+		 (remq
+		  nil
+		  (mapcar
+		   (lambda (x) (when (string-match-p
+				 (regexp-quote company-prefix) x)
+			    (append res x)))
+		   (split-string
+		    (car alist)
+		    split-string-default-separators))))))))
     (delete-char (- 0 (string-width c)))
     (org-insert-link
      t (concat file "::*" c) s)
@@ -351,63 +485,46 @@ description, this function will take the first match."
 	   'inside)
       (re-search-backward "]]"))))
 
-;;;###autoload
-(defun company-org-headings/create-alist ()
-  "(Re-)create `company-org-headings/alist'.
-The buffers related to the
-`company-org-headings/search-directory' will be saved beforehand.
+(defun company-org-headings/candidates ()
+  ;; conditions when to set the idle-timer
+  (when (or (not company-org-headings/alist)
+	    (when company-org-headings/rebuild-alist-on-idle-p
+	      (not (member company-org-headings/idle-timer
+			   timer-idle-list))))
+    ;; create the `company-org-headings/alist' on next idle time
+    ;; if it doesn't yet exist
+    (company-org-headings/set-idle-timer))
+  (company-org-headings/matching-candidates arg))
 
-If you for example want to alter the candidates
-`company-org-headings' will provide, make use of the
-`company-org-headings/create-alist-post-hook'."
-  (interactive)
-  (when (not company-org-headings/search-directory)
-    (user-error "Specify a directory to collect headings from."))
-  (message (concat "Creating a "
-		   (propertize "company-org-headings/alist"
-			       'face (car org-level-faces))
-		   "..."))
-  (setq company-org-headings/alist
-	(company-org-headings/aggregate-headings-in-dir
-	 company-org-headings/search-directory))
-  (setq company-org-headings/candidates
-	(mapcar 'car company-org-headings/alist))
-  (message "Creating a company-org-headings/alist... done.")
-  (run-hooks 'company-org-headings/create-alist-post-hook))
+(defun company-org-headings/prefix-p ()
+  (and
+   (derived-mode-p 'org-mode)
+   (or
+    (when company-org-headings/use-in-capture-mode
+      (and org-capture-mode
+	   (buffer-base-buffer (current-buffer))))
+    (buffer-file-name))
+   company-org-headings/search-directory
+   ;; when the restriction is desired, test if file is in the
+   ;; directory
+   (if company-org-headings/restricted-to-directory
+       (or
+	(when company-org-headings/use-in-capture-mode
+	  (and org-capture-mode
+	       (buffer-base-buffer (current-buffer))))
+	(company-org-headings/in-search-dir-and-org-p
+	 (buffer-file-name)))
+     ;; else return t
+     t)))
 
 ;;;###autoload
 (defun company-org-headings (command &optional arg &rest ignored)
-  "`company-mode' completion back-end for Org-mode headings."
+  "`company-mode' completion back-end for `org-mode' headings."
   (interactive (list 'interactive))
   (cl-case command
     (interactive (company-begin-backend 'company-org-headings))
-    (prefix
-     (when
-	 (and
-	  (derived-mode-p 'org-mode)
-	  (or
-	   (when company-org-headings/use-in-capture-mode
-	     (and org-capture-mode
-		  (buffer-base-buffer (current-buffer))))
-	   (buffer-file-name))
-	  company-org-headings/search-directory
-	  ;; when the restriction is desired, test if file is in the directory
-	  (if company-org-headings/restricted-to-directory
-	      (or
-	       (when company-org-headings/use-in-capture-mode
-		 (and org-capture-mode
-		      (buffer-base-buffer (current-buffer))))
-	       (file-in-directory-p (buffer-file-name)
-				    company-org-headings/search-directory))
-	    ;; else return t
-	    t))
-       (company-grab-symbol)))
-    (candidates
-     (progn
-       ;; create a `company-org-headings/alist' if it doesn't yet exist
-       (when (not company-org-headings/alist)
-	 (company-org-headings/create-alist))
-       (company-org-headings/matching-candidates arg)))
+    (prefix (when (company-org-headings/prefix-p) (company-grab-symbol)))
+    (candidates (company-org-headings/candidates))
     (meta
      (when company-org-headings/show-headings-context
        (company-org-headings/meta)))

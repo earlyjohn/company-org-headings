@@ -18,20 +18,29 @@ Since this backend is Org-mode specific, using the ~org-mode-hook~ makes sense:
 	  (lambda () (set (make-local-variable 'company-backends)
 		     '((company-org-headings)))))
 #+END_SRC
+
+Specify the directory that should be parsed for org heading elements:
+
+#+begin_src elisp :results value
+(setq company-org-headings/search-directory "/path/to/notes")
+#+end_src
+
 **** Completion
-~company-org-headings~ provides completion using ~string-match-p~. A real fuzzy matching is not planned for this ~company-backend~.
+~company-org-headings~ provides completion using ~string-match-p~. A real fuzzy matching is not planned for this ~company-backend~. Depending on ~company-org-headings/link-description~, the org link's description may either be the full heading text or the word in the candidate that matches the string at point.
 **** Stop Words
-To improve the meaningfulness of candidates, ~company-org-headings~ ignores stop words (most common words in a language) from the candidates when ~company-org-headings/ignore-stopwords~ is set to a non-nil value. In fact with this variable set to ~t~ the backend will only offer candidates whenever the symbol at point is *not* a prefix of any stopword. You may extend the ~company-org-headings/stopwords~ to your needs.
+To improve the meaningfulness of candidates, ~company-org-headings~ ignores stop words (most common words in a language) in the candidates when ~company-org-headings/ignore-stopwords~ is set to a non-nil value. In fact, with this variable being set to ~t~, the backend will only offer candidates whenever the symbol at point is *not* a prefix of any stopword. You may extend the ~company-org-headings/stopwords~ to your needs.
 **** Specify the Directory
-Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all Org-mode buffers.
+Specify the directory to retrieve the Org-mode headings from in ~company-org-headings/search-directory~. Setting ~company-org-headings/restricted-to-directory~ to ~t~ will restrict the ~company-backend~ to the given directory. This makes sense if you only want the completion in a directory dedicated to notes files rather than in all org buffers.
 **** Show the Context of Headings
-Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading to show the context of the candidate at point in the minibuffer. The default is set to ~path~ and will provide contextual information like the ~org-display-outline-path~ command does.
+Short headings like "Summary" tend to omit contextual information, the heading text and the filename alone may not be satisfactory. A non-nil ~company-org-headings/show-headings-context~ will reveal the higher level heading(s) to show the context of the candidate at point in the minibuffer. The default is set to ~path~ and will provide contextual information like the ~org-display-outline-path~ command does.
 **** Case-Sensivity
 Set ~company-org-headings/case-sensitive~ to nil to allow case-insensitive matching of completion candidates.
-**** Add new Headings to the Alist
-Append newly created headings in the current buffer via ~company-org-headings/append-current-buffer-file-headings~ to the ~company-org-headings/alist~. Since it makes no sense to link to temporary buffers, the current buffer has to be associated with an existing file. In my opinion, there are two interesting hooks to refer the function to: ~org-insert-heading-hook~ and ~after-save-hook~.
+**** Build the Alist and Add New Headings
+Before providing any candidates for completion, this backend parses the org files in the specified directory. Since the parser may take some time and, due to its single-threaded nature, block Emacs, ~company-org-headings~ collects the data on idle time. ~company-org-headings/idle-time-before-parsing~ determines the idle time before the parser gets active. The timer is set the first time ~company~ tries to retrieve candidates. To rebuild the alist on a regular basis, set ~company-org-headings/rebuild-alist-on-idle-p~ to a non-nil value. New heading elements will be pushed to the alist, the timer will be reset whenever ~company~ looks for candidates.
+
+The backend also offers an option to append newly created headings in the current file immediately: the ~company-org-headings/append-current-file-headings~ function may be passed to a hook, for example the ~org-insert-heading-hook~ or the ~after-save-hook~:
 
 #+begin_src elisp :results value
 (add-hook 'org-insert-heading-hook
-	  #'company-org-headings/append-current-buffer-file-headings)
+	  #'company-org-headings/append-current-file-headings)
 #+end_src
