@@ -223,8 +223,8 @@ There are two choices to keep the alist up to date:
 append: Heading elements in the currently visited file are
 appended to the alist if they are not there yet.
 
-rebuild: Parse the whole directory again and append new heading
-elements.
+rebuild: Parse the whole directory again, add new heading
+elements and remove those which don't exist anymore.
 
 A value of nil will inhibit the recurring parsing, leaving you
 with the alist built at the very beginning."
@@ -354,6 +354,12 @@ with the alist built at the very beginning."
 	       (equal (aref (car timer-list) 5)
 		      'company-org-headings/parse-message))
 	(run-with-timer 1 nil 'company-org-headings/parse-message secs))
+      ;; remove entries of currently parsed file when a rebuild of the
+      ;; alist is desired
+      (when (eq company-org-headings/rebuild-alist-on-idle-p 'rebuild)
+	(setq company-org-headings/alist
+	      (cl-remove-if (lambda (x) (equal (cadr x) file))
+			    company-org-headings/alist)))
       (mapc
        (lambda (x)
 	 ;; push to the alist only if it's not already there
